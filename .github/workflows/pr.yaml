@@ -8,12 +8,27 @@ on:
 
 jobs:
 
+  pre-commit:
+    name: Pre-commit checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.0"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: pre-commit/action@v3.0.1
+
   Dockerfile-linter:
     name: Check Dockerfiles
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hadolint/hadolint-action@v3.1.0
+      - uses: actions/checkout@v6
+      - uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: Dockerfile
   go-linters:
@@ -21,25 +36,25 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Set up Go 1.x
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.25.0"
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Run Gosec Security Scanner
-        uses: securego/gosec@master
+        uses: securego/gosec@v2.25.0
         with:
           args: -exclude-generated ./...
         env:
           GOROOT: ""
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           args: --timeout=10m
           only-new-issues: true
-      - uses: dominikh/staticcheck-action@v1.4.0
+      - uses: dominikh/staticcheck-action@v1.4.1
         with:
           version: "latest"
           install-go: false
@@ -51,15 +66,15 @@ jobs:
       OPERATOR_SDK_VERSION: v1.39.1
     steps:
       - name: Set up Go 1.x
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.25.0"
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Cache Operator SDK ${{ env.OPERATOR_SDK_VERSION }}
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: cache-operator-sdk
         with:
           path: ~/cache
@@ -68,20 +83,20 @@ jobs:
         if: steps.cache-operator-sdk.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/cache
-          wget https://github.com/operator-framework/operator-sdk/releases/download/${OPERATOR_SDK_VERSION}/operator-sdk_linux_amd64 -O ~/cache/operator-sdk-${OPERATOR_SDK_VERSION} > /dev/null -O ~/cache/operator-sdk-${OPERATOR_SDK_VERSION} > /dev/null
-          chmod +x ~/cache/operator-sdk-${OPERATOR_SDK_VERSION}
+          wget https://github.com/operator-framework/operator-sdk/releases/download/"${OPERATOR_SDK_VERSION}"/operator-sdk_linux_amd64 -O ~/cache/operator-sdk-"${OPERATOR_SDK_VERSION}" > /dev/null
+          chmod +x ~/cache/operator-sdk-"${OPERATOR_SDK_VERSION}"
       - name: Install Operator SDK ${{ env.OPERATOR_SDK_VERSION }}
         run: |
           mkdir -p ~/bin
-          cp ~/cache/operator-sdk-${OPERATOR_SDK_VERSION} ~/bin/operator-sdk
-          echo "$HOME/bin" >> $GITHUB_PATH
+          cp ~/cache/operator-sdk-"${OPERATOR_SDK_VERSION}" ~/bin/operator-sdk
+          echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: Regenerate executables with current environment packages
         run: |
           rm -f bin/kustomize bin/controller-gen
           make kustomize controller-gen
       - name: Cache go modules
         id: cache-mod
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -94,7 +109,7 @@ jobs:
         run: |
           time_before=$(date "+%F %T")
           go mod tidy
-          if [[ $(find . -type f -newermt "$time_before") ]]
+          if [[ -n "$(find . -type f -newermt "$time_before")" ]]
           then
             echo "Go mod state is not clean:"
             find . -type f -newermt "$time_before"
@@ -104,10 +119,10 @@ jobs:
         run: |
           time_before=$(date "+%F %T")
           make fmt
-          if [[ $(find . -type f -newermt "$time_before") ]]
+          if [[ -n "$(find . -type f -newermt "$time_before")" ]]
           then
             echo "Some files are not properly formatted."
-            echo "Please run `go fmt` and amend your commit."
+            echo "Please run \`go fmt\` and amend your commit."
             find . -type f -newermt "$time_before"
             exit 1
           fi
@@ -115,7 +130,7 @@ jobs:
         run: |
           set -euo pipefail
           make generate manifests
-          if [[ ! -z $(git status -s) ]]
+          if [[ ! -z "$(git status -s)" ]]
           then
             echo "generated sources are not up to date:"
             git --no-pager diff
@@ -123,7 +138,7 @@ jobs:
           fi
       - name: Check RBAC wildcards
         run: |
-          if grep -rni "*" /tmp/integration-service/config/rbac/* ; then
+          if grep -rnF "*" /tmp/integration-service/config/rbac/* ; then
             echo "generated RBAC roles contains wildcards"
             exit 1
           fi
@@ -131,7 +146,7 @@ jobs:
         run: |
           make test
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unit-tests
@@ -140,7 +155,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
@@ -151,7 +166,7 @@ jobs:
   kube-linter:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # This prepares directory where github/codeql-action/upload-sarif@v1 looks up report files by default.
       - name: Create ./.kube-linter/ for deployment files
         shell: bash
