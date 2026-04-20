@@ -130,7 +130,7 @@ jobs:
         run: |
           set -euo pipefail
           make generate manifests
-          if [[ ! -z "$(git status -s)" ]]
+          if [[ -n "$(git status -s)" ]]
           then
             echo "generated sources are not up to date:"
             git --no-pager diff

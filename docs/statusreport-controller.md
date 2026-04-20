@@ -11,7 +11,7 @@ flowchart TD
 %%%%%%%%%%%%%%%%%%%%%%% Drawing EnsureSnapshotFinishedAllTests() function
 
 %% Node definitions
-  
+
   get_required_scenarios(Get all required <br> IntegrationTestScenarios)
   parse_snapshot_status(Parse the Snapshot's <br> status annotation)
   check_finished_tests{Did Snapshot <br> finish all required <br> integration tests?}
@@ -112,7 +112,7 @@ flowchart TD
 %%%%%%%%%%%%%%%%%%%%%%% Drawing EnsureGroupSnapshotCreationStatusReportedToGitProvider() function
 
 %% Node definitions
-  
+
   check_snapshot_annotation(Process further if: <br>Group snapshot creation failure is annotated to snapshot)
   report_groupsnapshotcreation_failure(Report group snapshot creation failure<br>back to git provider)
   continue_processing(Controller continues processing)

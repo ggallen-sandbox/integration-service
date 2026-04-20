@@ -133,7 +133,7 @@ jobs:
 
           # Sanitize line endings first
           sed -i 's/\r$//' "$TRIAGE_FILE"
-          
+
           # Extract labels safely, ignoring potential markdown codeblock wrappers
           LABELS=$(sed -n 's/^LABELS:[[:space:]]*//p' "$TRIAGE_FILE" | head -1)
           # Extract summary (everything after the --- separator)

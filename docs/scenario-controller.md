@@ -13,7 +13,7 @@ flowchart TD
   %%%%%%%%%%%%%%%%%%%%%%% Drawing EnsureCreatedScenarioIsValid() function
 
   %% Node definitions
-  
+
   application_exists{"Application for scenario <br>was found?"}
   set_owner_reference(Set owner reference to <br>IntegrationTestScenario <br> if not already existing)
   status_check{"IntegrationTestScenario <br>has status<br>IntegrationTestScenarioValid<br>condition undefined<br>or false"}

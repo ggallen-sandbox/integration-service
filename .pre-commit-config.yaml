@@ -1,12 +1,19 @@
-exclude: '^(vendor/|dist/chart/templates/|.*_test\.go|.*_test_data\.go)'
+exclude: '^(vendor/|dist/chart/templates/)'
 repos:
   # Go formatting and vetting
   - repo: https://github.com/dnephin/pre-commit-golang
     rev: v0.5.1
     hooks:
       - id: go-fmt
-      - id: go-vet
       - id: go-mod-tidy
+  - repo: local
+    hooks:
+      - id: go-vet
+        name: go vet
+        entry: bash -c 'exec go vet ./...'
+        language: system
+        types: [go]
+        pass_filenames: false
 
   # Secret detection with gitleaks (uses existing .gitleaks.toml)
   - repo: https://github.com/gitleaks/gitleaks
@@ -28,6 +35,7 @@ repos:
         args: ['--maxkb=500']
       - id: check-merge-conflict
       - id: detect-private-key
+        exclude: '^git/github/github_test\.go$'
       - id: check-yaml
         args: ['--allow-multiple-documents']
       - id: end-of-file-fixer
