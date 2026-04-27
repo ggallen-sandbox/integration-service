@@ -15,6 +15,9 @@
 # titles, comment bodies, and PR descriptions.
 name: fullsend
 
+permissions:
+  contents: read
+
 on:
   issues:
     types: [labeled]
