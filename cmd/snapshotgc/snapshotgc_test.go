@@ -11,9 +11,11 @@ import (
 	"github.com/go-logr/logr"
 	applicationapiv1alpha1 "github.com/konflux-ci/application-api/api/v1alpha1"
 	"github.com/konflux-ci/integration-service/gitops"
+	"github.com/konflux-ci/integration-service/helpers"
 	releasev1alpha1 "github.com/konflux-ci/release-service/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	tektonv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	"github.com/tonglil/buflogr"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1702,6 +1704,157 @@ var _ = Describe("Test garbage collection for snapshots", func() {
 
 			// Total: 3 snapshots should be deleted (1 oldeest push + 2 PR)
 			Expect(output).To(HaveLen(3))
+		})
+	})
+
+	Describe("Test removePipelineRunFinalizersForSnapshot", func() {
+		It("Removes finalizers from PLRs associated with snapshot", func() {
+			snap := &applicationapiv1alpha1.Snapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "snap-with-plrs",
+					Namespace: "ns1",
+				},
+			}
+			plr1 := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "plr-1",
+					Namespace: "ns1",
+					Labels: map[string]string{
+						"pipelines.appstudio.openshift.io/type": "test",
+						"appstudio.openshift.io/snapshot":       "snap-with-plrs",
+					},
+					Finalizers: []string{helpers.IntegrationPipelineRunFinalizer},
+				},
+			}
+			plr2 := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "plr-2",
+					Namespace: "ns1",
+					Labels: map[string]string{
+						"pipelines.appstudio.openshift.io/type": "test",
+						"appstudio.openshift.io/snapshot":       "snap-with-plrs",
+					},
+					Finalizers: []string{helpers.IntegrationPipelineRunFinalizer},
+				},
+			}
+			// PLR for a different snapshot - should not be affected
+			plrOther := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "plr-other",
+					Namespace: "ns1",
+					Labels: map[string]string{
+						"pipelines.appstudio.openshift.io/type": "test",
+						"appstudio.openshift.io/snapshot":       "other-snapshot",
+					},
+					Finalizers: []string{helpers.IntegrationPipelineRunFinalizer},
+				},
+			}
+
+			cl := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(snap, plr1, plr2, plrOther).
+				Build()
+
+			removePipelineRunFinalizersForSnapshot(cl, snap, logger)
+
+			// Verify finalizers removed from PLRs of target snapshot
+			updatedPLR1 := &tektonv1.PipelineRun{}
+			Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(plr1), updatedPLR1)).Should(Succeed())
+			Expect(updatedPLR1.Finalizers).NotTo(ContainElement(helpers.IntegrationPipelineRunFinalizer))
+
+			updatedPLR2 := &tektonv1.PipelineRun{}
+			Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(plr2), updatedPLR2)).Should(Succeed())
+			Expect(updatedPLR2.Finalizers).NotTo(ContainElement(helpers.IntegrationPipelineRunFinalizer))
+
+			// Verify other snapshot's PLR still has finalizer
+			updatedPLROther := &tektonv1.PipelineRun{}
+			Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(plrOther), updatedPLROther)).Should(Succeed())
+			Expect(updatedPLROther.Finalizers).To(ContainElement(helpers.IntegrationPipelineRunFinalizer))
+		})
+
+		It("Does not fail when no PLRs exist for snapshot", func() {
+			snap := &applicationapiv1alpha1.Snapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "snap-no-plrs",
+					Namespace: "ns1",
+				},
+			}
+			cl := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(snap).
+				Build()
+
+			// Should not panic or fail
+			removePipelineRunFinalizersForSnapshot(cl, snap, logger)
+		})
+
+		It("Skips PLRs without the finalizer", func() {
+			snap := &applicationapiv1alpha1.Snapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "snap-no-finalizer-plrs",
+					Namespace: "ns1",
+				},
+			}
+			plr := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "plr-no-finalizer",
+					Namespace: "ns1",
+					Labels: map[string]string{
+						"pipelines.appstudio.openshift.io/type": "test",
+						"appstudio.openshift.io/snapshot":       "snap-no-finalizer-plrs",
+					},
+				},
+			}
+
+			cl := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(snap, plr).
+				Build()
+
+			removePipelineRunFinalizersForSnapshot(cl, snap, logger)
+
+			updatedPLR := &tektonv1.PipelineRun{}
+			Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(plr), updatedPLR)).Should(Succeed())
+			Expect(updatedPLR.Finalizers).To(BeEmpty())
+		})
+	})
+
+	Describe("Test deleteSnapshots removes PLR finalizers", func() {
+		It("Removes PLR finalizers before deleting snapshot", func() {
+			snap := &applicationapiv1alpha1.Snapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "snap-to-delete",
+					Namespace: "ns1",
+				},
+			}
+			plr := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "plr-for-deleted-snap",
+					Namespace: "ns1",
+					Labels: map[string]string{
+						"pipelines.appstudio.openshift.io/type": "test",
+						"appstudio.openshift.io/snapshot":       "snap-to-delete",
+					},
+					Finalizers: []string{helpers.IntegrationPipelineRunFinalizer},
+				},
+			}
+
+			cl := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(snap, plr).
+				Build()
+
+			deleteSnapshots(cl, []applicationapiv1alpha1.Snapshot{*snap}, logger)
+
+			// Snapshot should be deleted
+			snapsRemaining := &applicationapiv1alpha1.SnapshotList{}
+			Expect(cl.List(context.Background(), snapsRemaining, &client.ListOptions{Namespace: "ns1"})).Should(Succeed())
+			Expect(snapsRemaining.Items).To(BeEmpty())
+
+			// PLR finalizer should have been removed
+			updatedPLR := &tektonv1.PipelineRun{}
+			Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(plr), updatedPLR)).Should(Succeed())
+			Expect(updatedPLR.Finalizers).NotTo(ContainElement(helpers.IntegrationPipelineRunFinalizer))
 		})
 	})
 })

@@ -17,28 +17,31 @@ limitations under the License.
 package gitops_test
 
 import (
-	"github.com/konflux-ci/integration-service/api/v1beta2"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	. "github.com/onsi/gomega/gstruct"
-
+	"bytes"
 	"encoding/json"
 	"strconv"
 	"time"
 
 	applicationapiv1alpha1 "github.com/konflux-ci/application-api/api/v1alpha1"
+	"github.com/konflux-ci/integration-service/api/v1beta2"
 	"github.com/konflux-ci/integration-service/gitops"
+	"github.com/konflux-ci/integration-service/helpers"
 	"github.com/konflux-ci/operator-toolkit/metadata"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gstruct"
 	pacv1alpha1 "github.com/openshift-pipelines/pipelines-as-code/pkg/apis/pipelinesascode/v1alpha1"
 	tektonv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+	"github.com/tonglil/buflogr"
+	"knative.dev/pkg/apis"
+	duckv1 "knative.dev/pkg/apis/duck/v1"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("Gitops functions for managing Snapshots", Ordered, func() {
@@ -1389,6 +1392,116 @@ var _ = Describe("Gitops functions for managing Snapshots", Ordered, func() {
 		It("when the snapshot's IgnoreSupersessionAnnotation is 'true'", func() {
 			hasSnapshot.Annotations[gitops.IgnoreSupersessionAnnotation] = "true"
 			Expect(gitops.IgnoreSupersession(hasSnapshot.ObjectMeta)).To(BeTrue())
+		})
+	})
+
+	Describe("CancelPipelineRuns", func() {
+		var (
+			inProgressPLR *tektonv1.PipelineRun
+			completedPLR  *tektonv1.PipelineRun
+			buf           bytes.Buffer
+			logger        helpers.IntegrationLogger
+		)
+
+		BeforeEach(func() {
+			buf.Reset()
+			logger = helpers.IntegrationLogger{Logger: buflogr.NewWithBuffer(&buf)}
+
+			inProgressPLR = &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "in-progress-plr-",
+					Namespace:    "default",
+					Labels: map[string]string{
+						"pipelines.appstudio.openshift.io/type": "test",
+						"appstudio.openshift.io/snapshot":       "test-snapshot",
+					},
+					Annotations: map[string]string{},
+					Finalizers:  []string{helpers.IntegrationPipelineRunFinalizer},
+				},
+			}
+			Expect(k8sClient.Create(ctx, inProgressPLR)).Should(Succeed())
+
+			completedPLR = &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "completed-plr-",
+					Namespace:    "default",
+					Labels: map[string]string{
+						"pipelines.appstudio.openshift.io/type": "test",
+						"appstudio.openshift.io/snapshot":       "test-snapshot",
+					},
+					Annotations: map[string]string{},
+					Finalizers:  []string{helpers.IntegrationPipelineRunFinalizer},
+				},
+			}
+			Expect(k8sClient.Create(ctx, completedPLR)).Should(Succeed())
+
+			// Mark completedPLR as finished by setting ConditionSucceeded to True
+			completedPLR.Status = tektonv1.PipelineRunStatus{
+				Status: duckv1.Status{
+					Conditions: duckv1.Conditions{
+						apis.Condition{
+							Type:   apis.ConditionSucceeded,
+							Status: "True",
+							Reason: "Completed",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, completedPLR)).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			// Clean up PLRs (remove finalizers first if still present)
+			for _, plr := range []*tektonv1.PipelineRun{inProgressPLR, completedPLR} {
+				freshPLR := &tektonv1.PipelineRun{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: plr.Name, Namespace: plr.Namespace}, freshPLR)
+				if err == nil {
+					if controllerutil.ContainsFinalizer(freshPLR, helpers.IntegrationPipelineRunFinalizer) {
+						patch := client.MergeFrom(freshPLR.DeepCopy())
+						controllerutil.RemoveFinalizer(freshPLR, helpers.IntegrationPipelineRunFinalizer)
+						_ = k8sClient.Patch(ctx, freshPLR, patch)
+					}
+					_ = k8sClient.Delete(ctx, freshPLR)
+				}
+			}
+		})
+
+		It("removes finalizer from both in-progress and completed PLRs", func() {
+			plrs := []tektonv1.PipelineRun{*inProgressPLR, *completedPLR}
+			Expect(gitops.CancelPipelineRuns(k8sClient, ctx, logger, plrs)).Should(Succeed())
+
+			// Verify finalizer removed from in-progress PLR
+			updatedInProgress := &tektonv1.PipelineRun{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name: inProgressPLR.Name, Namespace: inProgressPLR.Namespace,
+			}, updatedInProgress)).Should(Succeed())
+			Expect(controllerutil.ContainsFinalizer(updatedInProgress, helpers.IntegrationPipelineRunFinalizer)).To(BeFalse())
+
+			// Verify finalizer removed from completed PLR
+			updatedCompleted := &tektonv1.PipelineRun{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name: completedPLR.Name, Namespace: completedPLR.Namespace,
+			}, updatedCompleted)).Should(Succeed())
+			Expect(controllerutil.ContainsFinalizer(updatedCompleted, helpers.IntegrationPipelineRunFinalizer)).To(BeFalse())
+		})
+
+		It("cancels only in-progress PLRs, not completed ones", func() {
+			plrs := []tektonv1.PipelineRun{*inProgressPLR, *completedPLR}
+			Expect(gitops.CancelPipelineRuns(k8sClient, ctx, logger, plrs)).Should(Succeed())
+
+			// In-progress PLR should be cancelled
+			updatedInProgress := &tektonv1.PipelineRun{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name: inProgressPLR.Name, Namespace: inProgressPLR.Namespace,
+			}, updatedInProgress)).Should(Succeed())
+			Expect(string(updatedInProgress.Spec.Status)).To(Equal(string(tektonv1.PipelineRunSpecStatusCancelledRunFinally)))
+
+			// Completed PLR should NOT be cancelled
+			updatedCompleted := &tektonv1.PipelineRun{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name: completedPLR.Name, Namespace: completedPLR.Namespace,
+			}, updatedCompleted)).Should(Succeed())
+			Expect(string(updatedCompleted.Spec.Status)).To(BeEmpty())
 		})
 	})
 })
