@@ -1,12 +1,13 @@
 # fullsend shim workflow
-# Routes events to agent workflows in .fullsend via repository_dispatch.
+# Routes events to agent workflows in .fullsend via the dispatch.yml workflow.
 #
-# Credentials: uses ONLY secrets.FULLSEND_DISPATCH_TOKEN (PAT) to send
-# repository_dispatch events to owner/.fullsend. Agent workflows in .fullsend
-# listen for these events (fullsend-triage, fullsend-code, fullsend-review).
+# Credentials: generates a GitHub App installation token (via
+# FULLSEND_DISPATCH_CLIENT_ID and FULLSEND_DISPATCH_APP_PRIVATE_KEY) with
+# actions:write permission to trigger dispatch.yml in owner/.fullsend.
+# The dispatcher scans for agent workflows and triggers them.
 #
 # Security: pull_request_target runs the BASE branch version of this workflow,
-# preventing PRs from modifying it to exfiltrate the dispatch token.
+# preventing PRs from modifying it to exfiltrate credentials.
 # This shim never checks out PR code, so it is not vulnerable to "pwn request"
 # attacks (see: Trivy CVE-2026-33634, hackerbot-claw campaign).
 #
@@ -45,21 +46,30 @@ jobs:
         )
       )
     steps:
+      - name: Generate dispatch token
+        id: dispatch-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.FULLSEND_DISPATCH_CLIENT_ID }}
+          private-key: ${{ secrets.FULLSEND_DISPATCH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: .fullsend
+          permission-actions: write
+
       - name: Dispatch triage stage
         env:
-          GH_TOKEN: ${{ secrets.FULLSEND_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
           EVENT_PAYLOAD: ${{ toJSON(github.event) }}
           EVENT_TYPE: ${{ github.event_name }}
           SOURCE_REPO: ${{ github.repository }}
           DISPATCH_REPO: ${{ github.repository_owner }}/.fullsend
         run: |
-          body="$(jq -n \
-            --arg et "fullsend-triage" \
-            --arg oet "$EVENT_TYPE" \
-            --arg sr "$SOURCE_REPO" \
-            --arg ep "$EVENT_PAYLOAD" \
-            '{event_type: $et, client_payload: {event_type: $oet, source_repo: $sr, event_payload: $ep}}')"
-          printf '%s' "$body" | gh api --method POST "repos/$DISPATCH_REPO/dispatches" --input -
+          gh workflow run dispatch.yml \
+            --repo "$DISPATCH_REPO" \
+            -f stage=triage \
+            -f event_type="$EVENT_TYPE" \
+            -f source_repo="$SOURCE_REPO" \
+            -f event_payload="$EVENT_PAYLOAD"
 
   dispatch-code:
     runs-on: ubuntu-latest
@@ -71,21 +81,30 @@ jobs:
         startsWith(github.event.comment.body, '/code ')
       ))
     steps:
+      - name: Generate dispatch token
+        id: dispatch-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.FULLSEND_DISPATCH_CLIENT_ID }}
+          private-key: ${{ secrets.FULLSEND_DISPATCH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: .fullsend
+          permission-actions: write
+
       - name: Dispatch code stage
         env:
-          GH_TOKEN: ${{ secrets.FULLSEND_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
           EVENT_PAYLOAD: ${{ toJSON(github.event) }}
           EVENT_TYPE: ${{ github.event_name }}
           SOURCE_REPO: ${{ github.repository }}
           DISPATCH_REPO: ${{ github.repository_owner }}/.fullsend
         run: |
-          body="$(jq -n \
-            --arg et "fullsend-code" \
-            --arg oet "$EVENT_TYPE" \
-            --arg sr "$SOURCE_REPO" \
-            --arg ep "$EVENT_PAYLOAD" \
-            '{event_type: $et, client_payload: {event_type: $oet, source_repo: $sr, event_payload: $ep}}')"
-          printf '%s' "$body" | gh api --method POST "repos/$DISPATCH_REPO/dispatches" --input -
+          gh workflow run dispatch.yml \
+            --repo "$DISPATCH_REPO" \
+            -f stage=code \
+            -f event_type="$EVENT_TYPE" \
+            -f source_repo="$SOURCE_REPO" \
+            -f event_payload="$EVENT_PAYLOAD"
 
   dispatch-review:
     runs-on: ubuntu-latest
@@ -98,18 +117,27 @@ jobs:
       )) ||
       github.event_name == 'pull_request_target'
     steps:
+      - name: Generate dispatch token
+        id: dispatch-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.FULLSEND_DISPATCH_CLIENT_ID }}
+          private-key: ${{ secrets.FULLSEND_DISPATCH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: .fullsend
+          permission-actions: write
+
       - name: Dispatch review stage
         env:
-          GH_TOKEN: ${{ secrets.FULLSEND_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
           EVENT_PAYLOAD: ${{ toJSON(github.event) }}
           EVENT_TYPE: ${{ github.event_name }}
           SOURCE_REPO: ${{ github.repository }}
           DISPATCH_REPO: ${{ github.repository_owner }}/.fullsend
         run: |
-          body="$(jq -n \
-            --arg et "fullsend-review" \
-            --arg oet "$EVENT_TYPE" \
-            --arg sr "$SOURCE_REPO" \
-            --arg ep "$EVENT_PAYLOAD" \
-            '{event_type: $et, client_payload: {event_type: $oet, source_repo: $sr, event_payload: $ep}}')"
-          printf '%s' "$body" | gh api --method POST "repos/$DISPATCH_REPO/dispatches" --input -
+          gh workflow run dispatch.yml \
+            --repo "$DISPATCH_REPO" \
+            -f stage=review \
+            -f event_type="$EVENT_TYPE" \
+            -f source_repo="$SOURCE_REPO" \
+            -f event_payload="$EVENT_PAYLOAD"
