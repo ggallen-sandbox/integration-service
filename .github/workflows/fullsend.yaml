@@ -1,9 +1,9 @@
 # fullsend shim workflow
-# Routes events to per-role agent dispatch workflows in .fullsend.
+# Routes events to agent workflows in .fullsend via repository_dispatch.
 #
-# Credentials: uses ONLY secrets.FULLSEND_DISPATCH_TOKEN (PAT) to run
-# gh workflow run dispatch-agent.yml on owner/.fullsend. The orchestrator
-# GitHub App PEM lives only on .fullsend; enrolled repos never see it.
+# Credentials: uses ONLY secrets.FULLSEND_DISPATCH_TOKEN (PAT) to send
+# repository_dispatch events to owner/.fullsend. Agent workflows in .fullsend
+# listen for these events (fullsend-triage, fullsend-code, fullsend-review).
 #
 # Security: pull_request_target runs the BASE branch version of this workflow,
 # preventing PRs from modifying it to exfiltrate the dispatch token.
@@ -53,12 +53,13 @@ jobs:
           SOURCE_REPO: ${{ github.repository }}
           DISPATCH_REPO: ${{ github.repository_owner }}/.fullsend
         run: |
-          gh workflow run dispatch-agent.yml \
-            --repo "$DISPATCH_REPO" \
-            --field stage=triage \
-            --field event_type="$EVENT_TYPE" \
-            --field source_repo="$SOURCE_REPO" \
-            --field event_payload="$EVENT_PAYLOAD"
+          body="$(jq -n \
+            --arg et "fullsend-triage" \
+            --arg oet "$EVENT_TYPE" \
+            --arg sr "$SOURCE_REPO" \
+            --arg ep "$EVENT_PAYLOAD" \
+            '{event_type: $et, client_payload: {event_type: $oet, source_repo: $sr, event_payload: $ep}}')"
+          printf '%s' "$body" | gh api --method POST "repos/$DISPATCH_REPO/dispatches" --input -
 
   dispatch-code:
     runs-on: ubuntu-latest
@@ -78,12 +79,13 @@ jobs:
           SOURCE_REPO: ${{ github.repository }}
           DISPATCH_REPO: ${{ github.repository_owner }}/.fullsend
         run: |
-          gh workflow run dispatch-agent.yml \
-            --repo "$DISPATCH_REPO" \
-            --field stage=code \
-            --field event_type="$EVENT_TYPE" \
-            --field source_repo="$SOURCE_REPO" \
-            --field event_payload="$EVENT_PAYLOAD"
+          body="$(jq -n \
+            --arg et "fullsend-code" \
+            --arg oet "$EVENT_TYPE" \
+            --arg sr "$SOURCE_REPO" \
+            --arg ep "$EVENT_PAYLOAD" \
+            '{event_type: $et, client_payload: {event_type: $oet, source_repo: $sr, event_payload: $ep}}')"
+          printf '%s' "$body" | gh api --method POST "repos/$DISPATCH_REPO/dispatches" --input -
 
   dispatch-review:
     runs-on: ubuntu-latest
@@ -104,9 +106,10 @@ jobs:
           SOURCE_REPO: ${{ github.repository }}
           DISPATCH_REPO: ${{ github.repository_owner }}/.fullsend
         run: |
-          gh workflow run dispatch-agent.yml \
-            --repo "$DISPATCH_REPO" \
-            --field stage=review \
-            --field event_type="$EVENT_TYPE" \
-            --field source_repo="$SOURCE_REPO" \
-            --field event_payload="$EVENT_PAYLOAD"
+          body="$(jq -n \
+            --arg et "fullsend-review" \
+            --arg oet "$EVENT_TYPE" \
+            --arg sr "$SOURCE_REPO" \
+            --arg ep "$EVENT_PAYLOAD" \
+            '{event_type: $et, client_payload: {event_type: $oet, source_repo: $sr, event_payload: $ep}}')"
+          printf '%s' "$body" | gh api --method POST "repos/$DISPATCH_REPO/dispatches" --input -
