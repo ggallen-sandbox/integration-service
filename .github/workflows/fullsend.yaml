@@ -1,10 +1,9 @@
 # fullsend shim workflow
 # Routes events to agent workflows in .fullsend via the dispatch.yml workflow.
 #
-# Credentials: generates a GitHub App installation token (via
-# FULLSEND_DISPATCH_CLIENT_ID and FULLSEND_DISPATCH_APP_PRIVATE_KEY) with
-# actions:write permission to trigger dispatch.yml in owner/.fullsend.
-# The dispatcher scans for agent workflows and triggers them.
+# Credentials: uses secrets.FULLSEND_DISPATCH_TOKEN to trigger dispatch.yml
+# in owner/.fullsend via workflow_dispatch. The dispatcher (running in .fullsend)
+# generates its own GitHub App tokens and scans for agent workflows to trigger.
 #
 # Security: pull_request_target runs the BASE branch version of this workflow,
 # preventing PRs from modifying it to exfiltrate credentials.
@@ -46,19 +45,9 @@ jobs:
         )
       )
     steps:
-      - name: Generate dispatch token
-        id: dispatch-token
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ vars.FULLSEND_DISPATCH_CLIENT_ID }}
-          private-key: ${{ secrets.FULLSEND_DISPATCH_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: .fullsend
-          permission-actions: write
-
       - name: Dispatch triage stage
         env:
-          GH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.FULLSEND_DISPATCH_TOKEN }}
           EVENT_PAYLOAD: ${{ toJSON(github.event) }}
           EVENT_TYPE: ${{ github.event_name }}
           SOURCE_REPO: ${{ github.repository }}
@@ -81,19 +70,9 @@ jobs:
         startsWith(github.event.comment.body, '/code ')
       ))
     steps:
-      - name: Generate dispatch token
-        id: dispatch-token
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ vars.FULLSEND_DISPATCH_CLIENT_ID }}
-          private-key: ${{ secrets.FULLSEND_DISPATCH_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: .fullsend
-          permission-actions: write
-
       - name: Dispatch code stage
         env:
-          GH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.FULLSEND_DISPATCH_TOKEN }}
           EVENT_PAYLOAD: ${{ toJSON(github.event) }}
           EVENT_TYPE: ${{ github.event_name }}
           SOURCE_REPO: ${{ github.repository }}
@@ -117,19 +96,9 @@ jobs:
       )) ||
       github.event_name == 'pull_request_target'
     steps:
-      - name: Generate dispatch token
-        id: dispatch-token
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ vars.FULLSEND_DISPATCH_CLIENT_ID }}
-          private-key: ${{ secrets.FULLSEND_DISPATCH_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: .fullsend
-          permission-actions: write
-
       - name: Dispatch review stage
         env:
-          GH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.FULLSEND_DISPATCH_TOKEN }}
           EVENT_PAYLOAD: ${{ toJSON(github.event) }}
           EVENT_TYPE: ${{ github.event_name }}
           SOURCE_REPO: ${{ github.repository }}
