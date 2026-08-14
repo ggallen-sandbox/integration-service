@@ -44,7 +44,7 @@ jobs:
        || github.event.pull_request.head.ref != 'fullsend/scaffold-install')
       && (github.event_name != 'issue_comment'
        || github.event.comment.user.type != 'Bot')
-    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@7999832c04caab5ffd9db09a8a594fe313757824 # main
+    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@6f8b9680488dfa516de6b34b892c44564f3fbd6f # main
     with:
       event_action: ${{ github.event.action }}
       install_mode: per-repo
