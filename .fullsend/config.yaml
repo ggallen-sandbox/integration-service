@@ -11,9 +11,11 @@ roles:
     - fix
     - retro
     - prioritize
+agents:
+    - name: triage
+      source: https://raw.githubusercontent.com/ggallen/agents/worktree-gitlab-triage-agent/harness/triage.yaml#sha256=cdac12f2c9bde3bbe087d015d1f2337af8df14370ee7112a443896274d05dab9
 allowed_remote_resources:
-    - https://raw.githubusercontent.com/fullsend-ai/fullsend/
-    - https://raw.githubusercontent.com/fullsend-ai/agents/
+    - https://raw.githubusercontent.com/ggallen/agents/
 create_issues:
     allow_targets:
         repos:
