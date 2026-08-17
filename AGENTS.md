@@ -55,5 +55,6 @@ runs to validate component builds before promotion.
 ## Restrictions
 
 - Do not modify `.github/workflows/`, `.github/CODEOWNERS`, or CI configuration without explicit approval
+  - Exception: `.github/workflows/fullsend.yaml` is managed by the fullsend platform and may be updated via automated template sync
 - Do not add new dependencies without justification
 - Do not change API types in `api/` without considering backwards compatibility
