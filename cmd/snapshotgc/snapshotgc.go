@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"slices"
 	"sort"
@@ -29,7 +28,6 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -505,44 +503,6 @@ func getSnapshotsForRemoval(
 	return shortList
 }
 
-// removePipelineRunFinalizersForSnapshot removes the integration pipeline run
-// finalizer from all PipelineRuns associated with the given snapshot so they
-// can be pruned after the snapshot is deleted.
-func removePipelineRunFinalizersForSnapshot(
-	cl client.Client,
-	snapshot *applicationapiv1alpha1.Snapshot,
-	logger logr.Logger,
-) error {
-	pipelineRuns := &tektonv1.PipelineRunList{}
-	opts := []client.ListOption{
-		client.InNamespace(snapshot.Namespace),
-		client.MatchingLabels{
-			gitops.SnapshotLabel: snapshot.Name,
-		},
-	}
-	err := cl.List(context.Background(), pipelineRuns, opts...)
-	if err != nil {
-		return fmt.Errorf("failed to list PipelineRuns for snapshot %s: %w", snapshot.Name, err)
-	}
-
-	for i := range pipelineRuns.Items {
-		plr := &pipelineRuns.Items[i]
-		if !controllerutil.ContainsFinalizer(plr, helpers.IntegrationPipelineRunFinalizer) {
-			continue
-		}
-		patch := client.MergeFrom(plr.DeepCopy())
-		controllerutil.RemoveFinalizer(plr, helpers.IntegrationPipelineRunFinalizer)
-		if err := cl.Patch(context.Background(), plr, patch); err != nil {
-			logger.Error(err, "Failed to remove finalizer from PipelineRun",
-				"pipelineRun.name", plr.Name, "snapshot.name", snapshot.Name)
-		} else {
-			logger.V(1).Info("Removed finalizer from PipelineRun before snapshot deletion",
-				"pipelineRun.name", plr.Name, "snapshot.name", snapshot.Name)
-		}
-	}
-	return nil
-}
-
 // Delete snapshots determined to be garbage-collected
 func deleteSnapshots(
 	cl client.Client,
@@ -554,7 +514,11 @@ func deleteSnapshots(
 		snap := snap
 		// Remove finalizers from associated PipelineRuns before deleting
 		// the snapshot so they can be pruned by garbage collection
-		if err := removePipelineRunFinalizersForSnapshot(cl, &snap, logger); err != nil {
+		integrationLogger := helpers.IntegrationLogger{Logger: logger}
+		if err := helpers.RemoveFinalizerFromAllIntegrationPipelineRunsOfSnapshot(
+			context.Background(), cl, integrationLogger, snap,
+			helpers.IntegrationPipelineRunFinalizer,
+		); err != nil {
 			logger.Error(err, "Skipping snapshot deletion due to PLR finalizer cleanup failure",
 				"snapshot.name", snap.Name)
 			continue
