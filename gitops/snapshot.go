@@ -1452,14 +1452,15 @@ func CancelPipelineRuns(c client.Client, ctx context.Context, logger helpers.Int
 	// get all integration pipelineruns for a snapshot
 	for _, plr := range integrationTestPipelineRuns {
 		plr := plr
-		if !helpers.HasPipelineRunFinished(&plr) {
-			// remove finalizer and cancel pipelinerun
-			err := helpers.RemoveFinalizerFromPipelineRun(ctx, c, logger, &plr, helpers.IntegrationPipelineRunFinalizer)
-			if err != nil {
-				return err
-			}
+		// remove finalizer from all pipelineruns (both completed and in-progress)
+		// so they can be pruned by garbage collection
+		err := helpers.RemoveFinalizerFromPipelineRun(ctx, c, logger, &plr, helpers.IntegrationPipelineRunFinalizer)
+		if err != nil {
+			return err
+		}
 
-			// set "CancelledRunFinally" to PLR status, should gracefully cancel pipelinerun, this is so raw I hate this
+		if !helpers.HasPipelineRunFinished(&plr) {
+			// cancel only in-progress pipelineruns
 			patch := client.MergeFrom(plr.DeepCopy())
 			plr.Spec.Status = tektonv1.PipelineRunSpecStatusCancelledRunFinally
 			plr.Annotations[PRGroupCancelledAnnotation] = "true"
