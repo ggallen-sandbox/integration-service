@@ -26,7 +26,7 @@ runs to validate component builds before promotion.
 
 ## Coding Standards
 
-- Language: Go 1.21+
+- Language: Go 1.25+ (see go.mod for exact version)
 - Follow existing patterns in `controllers/` and `pkg/`
 - Use controller-runtime conventions for reconcilers
 - Error handling: wrap errors with `fmt.Errorf("context: %w", err)`
