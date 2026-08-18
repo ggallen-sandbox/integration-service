@@ -12,8 +12,7 @@ roles:
     - retro
     - prioritize
 agents:
-    - source: https://raw.githubusercontent.com/fullsend-ai/agents/253f38201c391dce656dd0508f4512184880aa4b/harness/triage.yaml#sha256=ca36c3b6f7cd2b722aa1c799f3c0d7b06b32c3b0bcc56641bd86c2fdcc8c0624
-    - source: https://raw.githubusercontent.com/fullsend-ai/agents/7ab477fa9d294a12ce8daabb147185e32ebb620f/harness/code.yaml#sha256=195193a356e61e9a5180ea56ee1313c7901df9ef74b15b0ca9205f32787f5042
+    - source: https://raw.githubusercontent.com/fullsend-ai/agents/c3e9c49fc41f49fffc879bd5c2fac3590f42634b/harness/review.yaml#sha256=f4255898011e3c171dab074479da9509b2c6c38c2aabc7f32f9a0a1f7ef5c183
 allowed_remote_resources:
     - https://raw.githubusercontent.com/fullsend-ai/fullsend/
     - https://raw.githubusercontent.com/fullsend-ai/agents/
