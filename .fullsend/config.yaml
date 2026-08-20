@@ -13,6 +13,7 @@ roles:
     - prioritize
 agents:
     - source: https://raw.githubusercontent.com/fullsend-ai/agents/e34d125b00948385bc9c66366bb5b65b9df5c707/harness/prioritize.yaml#sha256=026fdd71a4779cbf2155f27f1846065fa20add11e42493013beabbc32cbcea6a
+    - source: https://raw.githubusercontent.com/fullsend-ai/agents/8ad41b385a9fba9a74eef173136b5a0b7b06c58b/harness/fix.yaml#sha256=e0ea3143f926f349f67adde9db3a215b81be3e90199fe03c747df05472a78a99
 allowed_remote_resources:
     - https://raw.githubusercontent.com/fullsend-ai/fullsend/
     - https://raw.githubusercontent.com/fullsend-ai/agents/
