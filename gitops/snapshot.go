@@ -1463,6 +1463,9 @@ func CancelPipelineRuns(c client.Client, ctx context.Context, logger helpers.Int
 			// cancel only in-progress pipelineruns
 			patch := client.MergeFrom(plr.DeepCopy())
 			plr.Spec.Status = tektonv1.PipelineRunSpecStatusCancelledRunFinally
+			if plr.Annotations == nil {
+				plr.Annotations = make(map[string]string)
+			}
 			plr.Annotations[PRGroupCancelledAnnotation] = "true"
 
 			err = c.Patch(ctx, &plr, patch)

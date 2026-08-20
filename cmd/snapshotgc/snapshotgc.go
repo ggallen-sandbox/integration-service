@@ -510,11 +510,11 @@ func deleteSnapshots(
 	logger logr.Logger,
 ) {
 
+	integrationLogger := helpers.IntegrationLogger{Logger: logger}
 	for _, snap := range snapshots {
 		snap := snap
 		// Remove finalizers from associated PipelineRuns before deleting
 		// the snapshot so they can be pruned by garbage collection
-		integrationLogger := helpers.IntegrationLogger{Logger: logger}
 		if err := helpers.RemoveFinalizerFromAllIntegrationPipelineRunsOfSnapshot(
 			context.Background(), cl, integrationLogger, snap,
 			helpers.IntegrationPipelineRunFinalizer,
