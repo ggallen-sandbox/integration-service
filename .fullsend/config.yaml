@@ -14,7 +14,7 @@ roles:
 agents:
     - source: https://raw.githubusercontent.com/fullsend-ai/agents/e34d125b00948385bc9c66366bb5b65b9df5c707/harness/prioritize.yaml#sha256=026fdd71a4779cbf2155f27f1846065fa20add11e42493013beabbc32cbcea6a
     - source: https://raw.githubusercontent.com/fullsend-ai/agents/8ad41b385a9fba9a74eef173136b5a0b7b06c58b/harness/fix.yaml#sha256=e0ea3143f926f349f67adde9db3a215b81be3e90199fe03c747df05472a78a99
-    - source: https://raw.githubusercontent.com/fullsend-ai/agents/39f39883cbe1811dafc6702f6fa444a20a035907/harness/retro.yaml#sha256=f3ad13c6c933aa296cb9cdc0416e58d48b82dae95effc67d60425ebdb0e2f570
+    - source: https://raw.githubusercontent.com/fullsend-ai/agents/2c3e23f474b9dcac3e8837d32fba3bf08cec0236/harness/retro.yaml#sha256=907c0ce9c4da6ebfd4d3be7297afd0050026494f6d1d8c135e6bd5671f49a7c2
 allowed_remote_resources:
     - https://raw.githubusercontent.com/fullsend-ai/fullsend/
     - https://raw.githubusercontent.com/fullsend-ai/agents/
