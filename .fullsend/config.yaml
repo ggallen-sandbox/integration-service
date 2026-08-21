@@ -11,10 +11,12 @@ roles:
     - fix
     - retro
     - prioritize
+    - scribe
 agents:
     - source: https://raw.githubusercontent.com/fullsend-ai/agents/e34d125b00948385bc9c66366bb5b65b9df5c707/harness/prioritize.yaml#sha256=026fdd71a4779cbf2155f27f1846065fa20add11e42493013beabbc32cbcea6a
     - source: https://raw.githubusercontent.com/fullsend-ai/agents/fd90ec00024571dc0e036dcb55329c663c3df0e8/harness/fix.yaml#sha256=929c8b44f724cf6f385c9fa2987786a24813c331bd9537ca7b01e90a7ef26e9d
     - source: https://raw.githubusercontent.com/fullsend-ai/agents/2c3e23f474b9dcac3e8837d32fba3bf08cec0236/harness/retro.yaml#sha256=907c0ce9c4da6ebfd4d3be7297afd0050026494f6d1d8c135e6bd5671f49a7c2
+    - source: https://raw.githubusercontent.com/fullsend-ai/agents/0a1318292d072bced4c6fe5170cb01eae0d83099/harness/scribe.yaml#sha256=988dc1b90889abda5cf9cca06059bcdd0df6ca32e860318a8a433f698b9d9004
 allowed_remote_resources:
     - https://raw.githubusercontent.com/fullsend-ai/fullsend/
     - https://raw.githubusercontent.com/fullsend-ai/agents/
