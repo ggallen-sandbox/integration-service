@@ -11,15 +11,18 @@ import (
 	"github.com/go-logr/logr"
 	applicationapiv1alpha1 "github.com/konflux-ci/application-api/api/v1alpha1"
 	"github.com/konflux-ci/integration-service/gitops"
+	"github.com/konflux-ci/integration-service/helpers"
 	releasev1alpha1 "github.com/konflux-ci/release-service/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	tektonv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	"github.com/tonglil/buflogr"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 var _ = Describe("Test garbage collection for snapshots", func() {
@@ -1702,6 +1705,81 @@ var _ = Describe("Test garbage collection for snapshots", func() {
 
 			// Total: 3 snapshots should be deleted (1 oldeest push + 2 PR)
 			Expect(output).To(HaveLen(3))
+		})
+	})
+
+	Describe("Test deleteSnapshots removes PLR finalizers", func() {
+		It("Skips snapshot deletion when PLR finalizer cleanup fails", func() {
+			snap := &applicationapiv1alpha1.Snapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "snap-cleanup-fail",
+					Namespace: "ns1",
+				},
+			}
+
+			// Build the underlying client with the snapshot object
+			underlying := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(snap).
+				Build()
+
+			// Wrap with interceptor that fails List calls for PipelineRunList
+			cl := interceptor.NewClient(underlying, interceptor.Funcs{
+				List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+					if _, ok := list.(*tektonv1.PipelineRunList); ok {
+						return errors.New("simulated list failure")
+					}
+					return c.List(ctx, list, opts...)
+				},
+			})
+
+			deleteSnapshots(cl, []applicationapiv1alpha1.Snapshot{*snap}, logger)
+
+			// Snapshot should NOT be deleted because finalizer cleanup failed
+			snapsRemaining := &applicationapiv1alpha1.SnapshotList{}
+			Expect(underlying.List(context.Background(), snapsRemaining, &client.ListOptions{Namespace: "ns1"})).Should(Succeed())
+			Expect(snapsRemaining.Items).To(HaveLen(1))
+			Expect(snapsRemaining.Items[0].Name).To(Equal("snap-cleanup-fail"))
+
+			// Verify error was logged
+			Expect(buf.String()).To(ContainSubstring("Skipping snapshot deletion due to PLR finalizer cleanup failure"))
+		})
+
+		It("Removes PLR finalizers before deleting snapshot", func() {
+			snap := &applicationapiv1alpha1.Snapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "snap-to-delete",
+					Namespace: "ns1",
+				},
+			}
+			plr := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "plr-for-deleted-snap",
+					Namespace: "ns1",
+					Labels: map[string]string{
+						"pipelines.appstudio.openshift.io/type": "test",
+						gitops.SnapshotLabel:                    "snap-to-delete",
+					},
+					Finalizers: []string{helpers.IntegrationPipelineRunFinalizer},
+				},
+			}
+
+			cl := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(snap, plr).
+				Build()
+
+			deleteSnapshots(cl, []applicationapiv1alpha1.Snapshot{*snap}, logger)
+
+			// Snapshot should be deleted
+			snapsRemaining := &applicationapiv1alpha1.SnapshotList{}
+			Expect(cl.List(context.Background(), snapsRemaining, &client.ListOptions{Namespace: "ns1"})).Should(Succeed())
+			Expect(snapsRemaining.Items).To(BeEmpty())
+
+			// PLR finalizer should have been removed
+			updatedPLR := &tektonv1.PipelineRun{}
+			Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(plr), updatedPLR)).Should(Succeed())
+			Expect(updatedPLR.Finalizers).NotTo(ContainElement(helpers.IntegrationPipelineRunFinalizer))
 		})
 	})
 })
