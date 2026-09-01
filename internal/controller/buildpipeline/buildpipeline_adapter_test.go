@@ -862,6 +862,12 @@ var _ = Describe("Pipeline Adapter", Ordered, func() {
 				"foo":                                           "bar",
 			}
 			adapter = NewAdapter(ctx, buildPipelineRun, hasComp, hasApp, log, loader.NewMockLoader(), k8sClient)
+			adapter.context = toolkit.GetMockedContext(ctx, []toolkit.MockData{
+				{
+					ContextKey: loader.GetPipelineRunContextKey,
+					Resource:   buildPipelineRun,
+				},
+			})
 
 			Eventually(func() bool {
 				result, err := adapter.EnsureSnapshotExists()
